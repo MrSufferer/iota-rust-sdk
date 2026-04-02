@@ -14,9 +14,9 @@ use crate::{
     pagination::PaginationFilter,
     query_types::{
         LatestPackageQuery, MoveFunction, MoveModule, MovePackageVersionFilter,
-        NormalizedMoveFunctionQuery, NormalizedMoveFunctionQueryArgs, NormalizedMoveModuleQuery,
-        NormalizedMoveModuleQueryArgs, PackageArgs, PackageCheckpointFilter, PackageQuery,
-        PackageVersionsArgs, PackageVersionsQuery, PackagesQuery, PackagesQueryArgs,
+        MoveSchemaFunctionQuery, MoveSchemaFunctionQueryArgs, MoveSchemaModuleQuery,
+        MoveSchemaModuleQueryArgs, PackageCheckpointFilter, PackageQuery, PackageQueryArgs,
+        PackageVersionsQuery, PackageVersionsQueryArgs, PackagesQuery, PackagesQueryArgs,
     },
 };
 
@@ -37,7 +37,7 @@ impl Client {
         address: Address,
         version: impl Into<Option<u64>>,
     ) -> Result<Option<MovePackage>> {
-        let operation = PackageQuery::build(PackageArgs {
+        let operation = PackageQuery::build(PackageQueryArgs {
             address,
             version: version.into(),
         });
@@ -65,7 +65,7 @@ impl Client {
         before_version: impl Into<Option<u64>>,
     ) -> Result<Page<MovePackage>> {
         let pagination = self.pagination_filter(pagination_filter).await;
-        let operation = PackageVersionsQuery::build(PackageVersionsArgs {
+        let operation = PackageVersionsQuery::build(PackageVersionsQueryArgs {
             address,
             after: pagination.after.as_deref(),
             before: pagination.before.as_deref(),
@@ -102,7 +102,7 @@ impl Client {
     /// This corresponds to the package with the highest version that shares its
     /// original ID with the package at address.
     pub async fn package_latest(&self, address: Address) -> Result<Option<MovePackage>> {
-        let operation = LatestPackageQuery::build(PackageArgs {
+        let operation = LatestPackageQuery::build(PackageQueryArgs {
             address,
             version: None,
         });
@@ -166,16 +166,16 @@ impl Client {
         Ok(Page::new(page_info, packages))
     }
 
-    /// Return the normalized Move function data for the provided package,
+    /// Return Move schema function data for the provided package,
     /// module, and function.
-    pub async fn normalized_move_function(
+    pub async fn move_schema_function(
         &self,
         package: Address,
         module: &str,
         function: &str,
         version: impl Into<Option<u64>>,
     ) -> Result<Option<MoveFunction>> {
-        let operation = NormalizedMoveFunctionQuery::build(NormalizedMoveFunctionQueryArgs {
+        let operation = MoveSchemaFunctionQuery::build(MoveSchemaFunctionQueryArgs {
             address: package,
             module,
             function,
@@ -189,11 +189,11 @@ impl Client {
             .and_then(|m| m.function))
     }
 
-    /// Return the normalized Move module data for the provided module.
+    /// Return Move schema module data for the provided module.
     // TODO: do we want to self paginate everything and return all the data, or keep pagination
     // options?
     #[allow(clippy::too_many_arguments)]
-    pub async fn normalized_move_module(
+    pub async fn move_schema_module(
         &self,
         package: Address,
         module: &str,
@@ -207,7 +207,7 @@ impl Client {
         let friends = self.pagination_filter(pagination_filter_friends).await;
         let functions = self.pagination_filter(pagination_filter_functions).await;
         let structs = self.pagination_filter(pagination_filter_structs).await;
-        let operation = NormalizedMoveModuleQuery::build(NormalizedMoveModuleQueryArgs {
+        let operation = MoveSchemaModuleQuery::build(MoveSchemaModuleQueryArgs {
             package,
             module,
             version: version.into(),
@@ -291,5 +291,61 @@ mod tests {
             "Packages query returned no data for {} network",
             client.rpc_server()
         );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires NETWORK=local or NETWORK=testnet; run with: NETWORK=testnet cargo test -p iota-sdk-graphql-client test_move_schema_function -- --include-ignored"]
+    async fn test_move_schema_function() {
+        // Uses the IOTA Framework address and the " validator" module's "add_stake" function,
+        // which is stable and available on all networks.
+        let client = test_client();
+        let result = client
+            .move_schema_function(
+                Address::FRAMEWORK,
+                "validator",
+                "add_stake",
+                None,
+            )
+            .await
+            .map_err(|e| {
+                format!(
+                    "move_schema_function query failed for {} network. Error: {e}",
+                    client.rpc_server()
+                )
+            });
+
+        // Verify the query executed without a network/selection-set error.
+        // The result may be None if the function does not exist on this network version,
+        // which is not an error condition.
+        let _ = result.expect("move_schema_function should not return an error");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires NETWORK=local or NETWORK=testnet; run with: NETWORK=testnet cargo test -p iota-sdk-graphql-client test_move_schema_module -- --include-ignored"]
+    async fn test_move_schema_module() {
+        // Uses the IOTA Framework address and " coin" module, which is stable on all networks.
+        let client = test_client();
+        let result = client
+            .move_schema_module(
+                Address::FRAMEWORK,
+                "coin",
+                None,
+                PaginationFilter::default(),
+                PaginationFilter::default(),
+                PaginationFilter::default(),
+                PaginationFilter::default(),
+            )
+            .await
+            .map_err(|e| {
+                format!(
+                    "move_schema_module query failed for {} network. Error: {e}",
+                    client.rpc_server()
+                )
+            });
+
+        // Verify the query executed without a network/selection-set error.
+        // The result may be None if the module does not exist on this network version,
+        // which is not an error condition.
+        let _ = result.expect("move_schema_module should not return an error");
     }
 }

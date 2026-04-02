@@ -18,15 +18,16 @@ use crate::{
     pagination::{Page, PaginationFilter},
     query_types::{
         IotaNamesAddressDefaultNameQuery, IotaNamesAddressRegistrationsQuery,
-        IotaNamesDefaultNameArgs, IotaNamesDefaultNameQuery, IotaNamesRegistrationsArgs,
-        IotaNamesRegistrationsQuery, ResolveIotaNamesAddressArgs, ResolveIotaNamesAddressQuery,
+        IotaNamesDefaultNameLookup, IotaNamesDefaultNameQueryArgs, IotaNamesRegistrationsLookup,
+        IotaNamesRegistrationsQueryArgs, ResolveIotaNamesAddressQuery,
+        ResolveIotaNamesAddressQueryArgs,
     },
 };
 
 impl Client {
     /// Return the resolved address for the given name.
     pub async fn iota_names_lookup(&self, name: &str) -> Result<Option<Address>> {
-        let operation = ResolveIotaNamesAddressQuery::build(ResolveIotaNamesAddressArgs {
+        let operation = ResolveIotaNamesAddressQuery::build(ResolveIotaNamesAddressQueryArgs {
             name: name.to_owned(),
         });
         let response = self.run_query(&operation).await?;
@@ -48,18 +49,19 @@ impl Client {
         pagination_filter: PaginationFilter,
     ) -> Result<Page<NameRegistration>> {
         let pagination = self.pagination_filter(pagination_filter).await;
-        let operation = IotaNamesAddressRegistrationsQuery::build(IotaNamesRegistrationsArgs {
-            address,
-            after: pagination.after,
-            before: pagination.before,
-            first: pagination.first,
-            last: pagination.last,
-        });
+        let operation =
+            IotaNamesAddressRegistrationsQuery::build(IotaNamesRegistrationsQueryArgs {
+                address,
+                after: pagination.after,
+                before: pagination.before,
+                first: pagination.first,
+                last: pagination.last,
+            });
         let response = self.run_query(&operation).await?;
 
         let IotaNamesAddressRegistrationsQuery {
             address:
-                Some(IotaNamesRegistrationsQuery {
+                Some(IotaNamesRegistrationsLookup {
                     iota_names_registrations,
                 }),
         } = response
@@ -83,7 +85,7 @@ impl Client {
         address: Address,
         format: impl Into<Option<NameFormat>>,
     ) -> Result<Option<Name>> {
-        let operation = IotaNamesAddressDefaultNameQuery::build(IotaNamesDefaultNameArgs {
+        let operation = IotaNamesAddressDefaultNameQuery::build(IotaNamesDefaultNameQueryArgs {
             address,
             format: format.into().map(Into::into),
         });
@@ -91,7 +93,7 @@ impl Client {
 
         let IotaNamesAddressDefaultNameQuery {
             address:
-                Some(IotaNamesDefaultNameQuery {
+                Some(IotaNamesDefaultNameLookup {
                     iota_names_default_name: Some(name),
                 }),
         } = response

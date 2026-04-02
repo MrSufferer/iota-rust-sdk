@@ -1,6 +1,8 @@
 // Copyright (c) 2025 IOTA Stiftung
 // SPDX-License-Identifier: Apache-2.0
 
+//! Query types for IOTA Name Service (IotaNS) lookups and registrations.
+
 use base64ct::Encoding;
 
 use crate::{
@@ -8,19 +10,27 @@ use crate::{
     query_types::{Address, Base64, GQLAddress, PageInfo, schema},
 };
 
+// ===========================================================================
+// Queries
+// ===========================================================================
+
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
     schema = "rpc",
     graphql_type = "Query",
-    variables = "ResolveIotaNamesAddressArgs"
+    variables = "ResolveIotaNamesAddressQueryArgs"
 )]
 pub struct ResolveIotaNamesAddressQuery {
     #[arguments(name: $name)]
     pub resolve_iota_names_address: Option<GQLAddress>,
 }
 
+// ===========================================================================
+// Query Args
+// ===========================================================================
+
 #[derive(cynic::QueryVariables, Debug)]
-pub struct ResolveIotaNamesAddressArgs {
+pub struct ResolveIotaNamesAddressQueryArgs {
     pub name: String,
 }
 
@@ -28,37 +38,37 @@ pub struct ResolveIotaNamesAddressArgs {
 #[cynic(
     schema = "rpc",
     graphql_type = "Query",
-    variables = "IotaNamesRegistrationsArgs"
+    variables = "IotaNamesRegistrationsQueryArgs"
 )]
 pub struct IotaNamesAddressRegistrationsQuery {
     #[arguments(address: $address)]
-    pub address: Option<IotaNamesRegistrationsQuery>,
+    pub address: Option<IotaNamesRegistrationsLookup>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
     schema = "rpc",
     graphql_type = "Query",
-    variables = "IotaNamesDefaultNameArgs"
+    variables = "IotaNamesDefaultNameQueryArgs"
 )]
 pub struct IotaNamesAddressDefaultNameQuery {
     #[arguments(address: $address)]
-    pub address: Option<IotaNamesDefaultNameQuery>,
+    pub address: Option<IotaNamesDefaultNameLookup>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
     schema = "rpc",
     graphql_type = "Address",
-    variables = "IotaNamesRegistrationsArgs"
+    variables = "IotaNamesRegistrationsQueryArgs"
 )]
-pub struct IotaNamesRegistrationsQuery {
+pub struct IotaNamesRegistrationsLookup {
     #[arguments(after: $after, before: $before, first: $first, last: $last)]
     pub iota_names_registrations: NameRegistrationConnection,
 }
 
 #[derive(cynic::QueryVariables, Debug)]
-pub struct IotaNamesRegistrationsArgs {
+pub struct IotaNamesRegistrationsQueryArgs {
     pub address: Address,
     pub after: Option<String>,
     pub before: Option<String>,
@@ -70,18 +80,22 @@ pub struct IotaNamesRegistrationsArgs {
 #[cynic(
     schema = "rpc",
     graphql_type = "Address",
-    variables = "IotaNamesDefaultNameArgs"
+    variables = "IotaNamesDefaultNameQueryArgs"
 )]
-pub struct IotaNamesDefaultNameQuery {
+pub struct IotaNamesDefaultNameLookup {
     #[arguments(format: $format)]
     pub iota_names_default_name: Option<String>,
 }
 
 #[derive(cynic::QueryVariables, Debug)]
-pub struct IotaNamesDefaultNameArgs {
+pub struct IotaNamesDefaultNameQueryArgs {
     pub address: Address,
     pub format: Option<NameFormat>,
 }
+
+// ===========================================================================
+// Types
+// ===========================================================================
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema = "rpc", graphql_type = "NameRegistrationConnection")]
@@ -95,6 +109,10 @@ pub struct NameRegistrationConnection {
 pub struct NameRegistration {
     pub bcs: Option<Base64>,
 }
+
+// ===========================================================================
+// Conversions
+// ===========================================================================
 
 impl TryFrom<NameRegistration> for iota_types::iota_names::NameRegistration {
     type Error = Error;

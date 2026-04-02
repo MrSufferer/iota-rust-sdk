@@ -2,17 +2,19 @@
 // Modifications Copyright (c) 2025 IOTA Stiftung
 // SPDX-License-Identifier: Apache-2.0
 
+//! Query types for protocol configuration.
+
 use crate::query_types::schema;
 
 // ===========================================================================
-// Protocol Config Queries
+// Queries
 // ===========================================================================
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
     schema = "rpc",
     graphql_type = "Query",
-    variables = "ProtocolVersionArgs"
+    variables = "ProtocolConfigQueryArgs"
 )]
 pub struct ProtocolConfigQuery {
     #[arguments(protocolVersion: $id)]
@@ -24,12 +26,12 @@ pub struct ProtocolConfigQuery {
 // ===========================================================================
 
 #[derive(cynic::QueryVariables, Debug)]
-pub struct ProtocolVersionArgs {
+pub struct ProtocolConfigQueryArgs {
     pub id: Option<u64>,
 }
 
 // ===========================================================================
-// Protocol Config Types
+// Types
 // ===========================================================================
 
 /// Information about the configuration of the protocol.

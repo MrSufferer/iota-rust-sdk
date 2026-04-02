@@ -202,12 +202,12 @@ impl Object {
     }
 
     /// Try to interpret this object as a move struct
-    pub fn as_struct_opt(&self) -> Option<MoveStruct> {
+    pub fn as_struct_opt(&self) -> Option<RuntimeMoveStruct> {
         self.0.as_struct_opt().cloned().map(Into::into)
     }
 
     /// Interpret this object as a move struct
-    pub fn as_struct(&self) -> MoveStruct {
+    pub fn as_struct(&self) -> RuntimeMoveStruct {
         self.0.as_struct().clone().into()
     }
 
@@ -274,9 +274,9 @@ pub struct ObjectData(pub iota_sdk::types::ObjectData);
 
 #[uniffi::export]
 impl ObjectData {
-    /// Create an `ObjectData` from a `MoveStruct`
+    /// Create an `ObjectData` from a `RuntimeMoveStruct`
     #[uniffi::constructor]
-    pub fn new_move_struct(move_struct: MoveStruct) -> Self {
+    pub fn new_runtime_move_struct(move_struct: RuntimeMoveStruct) -> Self {
         Self(iota_sdk::types::ObjectData::Struct(move_struct.into()))
     }
 
@@ -286,7 +286,7 @@ impl ObjectData {
         Self(iota_sdk::types::ObjectData::Package(move_package.0.clone()))
     }
 
-    /// Return whether this object is a `MoveStruct`
+    /// Return whether this object is a `RuntimeMoveStruct`
     pub fn is_struct(&self) -> bool {
         self.0.is_struct()
     }
@@ -296,8 +296,8 @@ impl ObjectData {
         self.0.is_package()
     }
 
-    /// Try to interpret this object as a `MoveStruct`
-    pub fn as_struct_opt(&self) -> Option<MoveStruct> {
+    /// Try to interpret this object as a `RuntimeMoveStruct`
+    pub fn as_struct_opt(&self) -> Option<RuntimeMoveStruct> {
         self.0.as_struct_opt().cloned().map(Into::into)
     }
 
@@ -477,7 +477,7 @@ impl MovePackage {
 /// object-contents = uleb128 (object-id *OCTET) ; length followed by contents
 /// ```
 #[derive(uniffi::Record)]
-pub struct MoveStruct {
+pub struct RuntimeMoveStruct {
     /// The type of this object
     pub struct_type: Arc<StructTag>,
     /// Number that increases each time a tx takes this object as a mutable
@@ -488,7 +488,7 @@ pub struct MoveStruct {
     pub contents: Vec<u8>,
 }
 
-impl From<iota_sdk::types::MoveStruct> for MoveStruct {
+impl From<iota_sdk::types::MoveStruct> for RuntimeMoveStruct {
     fn from(value: iota_sdk::types::MoveStruct) -> Self {
         Self {
             struct_type: Arc::new(value.type_.into()),
@@ -498,14 +498,42 @@ impl From<iota_sdk::types::MoveStruct> for MoveStruct {
     }
 }
 
-impl From<MoveStruct> for iota_sdk::types::MoveStruct {
-    fn from(value: MoveStruct) -> Self {
+impl From<RuntimeMoveStruct> for iota_sdk::types::MoveStruct {
+    fn from(value: RuntimeMoveStruct) -> Self {
         Self {
             type_: value.struct_type.0.clone(),
             version: value.version,
             contents: value.contents,
         }
     }
+}
+
+/// Create this type from BCS encoded bytes.
+#[uniffi::export]
+pub fn runtime_move_struct_from_bcs(bcs: Vec<u8>) -> crate::error::Result<RuntimeMoveStruct> {
+    let data = bcs::from_bytes::<iota_sdk::types::MoveStruct>(&bcs)?;
+    Ok(data.into())
+}
+
+/// Convert this type to BCS encoded bytes.
+#[uniffi::export]
+pub fn runtime_move_struct_to_bcs(data: RuntimeMoveStruct) -> crate::error::Result<Vec<u8>> {
+    let data: iota_sdk::types::MoveStruct = data.into();
+    Ok(bcs::to_bytes(&data)?)
+}
+
+/// Create this type from JSON encoded string.
+#[uniffi::export]
+pub fn runtime_move_struct_from_json(json: &str) -> crate::error::Result<RuntimeMoveStruct> {
+    let data = serde_json::from_str::<iota_sdk::types::MoveStruct>(json)?;
+    Ok(data.into())
+}
+
+/// Convert this type to JSON encoded string.
+#[uniffi::export]
+pub fn runtime_move_struct_to_json(data: RuntimeMoveStruct) -> crate::error::Result<String> {
+    let data: iota_sdk::types::MoveStruct = data.into();
+    Ok(serde_json::to_string(&data)?)
 }
 
 /// Enum of different types of ownership for an object.
@@ -692,7 +720,6 @@ impl GenesisObject {
     }
 }
 
-crate::export_iota_types_bcs_conversion!(ObjectReference, TypeOrigin, UpgradeInfo, MoveStruct);
 crate::export_iota_types_objects_bcs_conversion!(
     ObjectId,
     Object,
@@ -701,7 +728,6 @@ crate::export_iota_types_objects_bcs_conversion!(
     Owner,
     GenesisObject
 );
-crate::export_iota_types_json_conversion!(ObjectReference, TypeOrigin, UpgradeInfo, MoveStruct);
 crate::export_iota_types_objects_json_conversion!(
     ObjectId,
     Object,
@@ -710,3 +736,100 @@ crate::export_iota_types_objects_json_conversion!(
     Owner,
     GenesisObject
 );
+
+#[cfg(test)]
+mod runtime_move_struct_tests {
+    use crate::types::object::*;
+
+    // Use fully-qualified paths to avoid `StructTag` name collision between
+    // `crate::types::StructTag` (FFI wrapper) and `iota_types::StructTag` (the actual type).
+    type TestStructTag = iota_types::type_tag::StructTag;
+
+    // === Bi-directional From conversions ===
+
+    #[test]
+    fn runtime_move_struct_from_types_roundtrip() {
+        let original = iota_sdk::types::MoveStruct {
+            type_: TestStructTag::new_gas_coin(),
+            version: 42,
+            contents: vec![0xDE, 0xAD, 0xBE, 0xEF],
+        };
+
+        let ffi: RuntimeMoveStruct = original.clone().into();
+        let roundtrip: iota_sdk::types::MoveStruct = ffi.into();
+
+        assert_eq!(roundtrip.type_, original.type_);
+        assert_eq!(roundtrip.version, original.version);
+        assert_eq!(roundtrip.contents, original.contents);
+    }
+
+    #[test]
+    fn runtime_move_struct_from_types_preserves_empty_contents() {
+        let original = iota_sdk::types::MoveStruct {
+            type_: TestStructTag::new_gas_coin(),
+            version: 0,
+            contents: vec![],
+        };
+
+        let ffi: RuntimeMoveStruct = original.clone().into();
+        let roundtrip: iota_sdk::types::MoveStruct = ffi.into();
+
+        assert!(roundtrip.contents.is_empty());
+    }
+
+    // === BCS round-trip ===
+
+    #[test]
+    fn runtime_move_struct_bcs_roundtrip() {
+        let original = iota_sdk::types::MoveStruct {
+            type_: TestStructTag::new_gas_coin(),
+            version: 0,
+            contents: vec![],
+        };
+
+        let encoded = runtime_move_struct_to_bcs(original.clone().into()).unwrap();
+        let decoded = runtime_move_struct_from_bcs(encoded).unwrap();
+        let roundtrip: iota_sdk::types::MoveStruct = decoded.into();
+
+        assert_eq!(roundtrip.type_, original.type_);
+        assert_eq!(roundtrip.version, original.version);
+        assert_eq!(roundtrip.contents, original.contents);
+    }
+
+    #[test]
+    fn runtime_move_struct_bcs_invalid_input() {
+        let result = runtime_move_struct_from_bcs(vec![0xFF, 0xFF, 0xFF]);
+        assert!(
+            result.is_err(),
+            "invalid BCS bytes should produce an error"
+        );
+    }
+
+    // === JSON round-trip ===
+
+    #[test]
+    fn runtime_move_struct_json_roundtrip() {
+        let original = iota_sdk::types::MoveStruct {
+            type_: TestStructTag::new_iota_coin_type(),
+            version: 1,
+            contents: vec![42],
+        };
+
+        let encoded = runtime_move_struct_to_json(original.clone().into()).unwrap();
+        let decoded = runtime_move_struct_from_json(&encoded).unwrap();
+        let roundtrip: iota_sdk::types::MoveStruct = decoded.into();
+
+        assert_eq!(roundtrip.type_, original.type_);
+        assert_eq!(roundtrip.version, original.version);
+        assert_eq!(roundtrip.contents, original.contents);
+    }
+
+    #[test]
+    fn runtime_move_struct_json_invalid_input() {
+        let result = runtime_move_struct_from_json("not valid json {{{");
+        assert!(
+            result.is_err(),
+            "invalid JSON should produce an error"
+        );
+    }
+}

@@ -8,10 +8,10 @@ use iota_sdk::graphql_client::{
     pagination::{Direction, PaginationFilter},
     query_types::{
         Base64, BigInt, Feature, MoveAbility, MoveEnum, MoveEnumConnection, MoveEnumVariant,
-        MoveField, MoveFunctionTypeParameter, MoveObject, MoveStructConnection, MoveStructQuery,
-        MoveStructTypeParameter, MoveVisibility, OpenMoveType, PageInfo, ProtocolConfigAttr,
-        ProtocolConfigFeatureFlag, ProtocolConfigs, ServiceConfig, TransactionBlockKindInput,
-        ValidatorCredentials,
+        MoveField, MoveFunctionTypeParameter, MoveObject, MoveStruct,
+        MoveStructConnection, MoveStructTypeParameter, MoveVisibility, OpenMoveType, PageInfo,
+        ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs, ServiceConfig,
+        TransactionBlockKindInput, ValidatorCredentials,
     },
 };
 
@@ -101,7 +101,7 @@ impl From<TransactionDataEffects> for iota_sdk::graphql_client::TransactionDataE
 }
 
 #[derive(uniffi::Record)]
-pub struct TransactionsFilter {
+pub struct TransactionBlockFilter {
     #[uniffi(default = None)]
     pub function: Option<String>,
     #[uniffi(default = None)]
@@ -126,8 +126,8 @@ pub struct TransactionsFilter {
     pub wrapped_or_deleted_object: Option<Arc<ObjectId>>,
 }
 
-impl From<iota_sdk::graphql_client::query_types::TransactionsFilter> for TransactionsFilter {
-    fn from(value: iota_sdk::graphql_client::query_types::TransactionsFilter) -> Self {
+impl From<iota_sdk::graphql_client::query_types::TransactionBlockFilter> for TransactionBlockFilter {
+    fn from(value: iota_sdk::graphql_client::query_types::TransactionBlockFilter) -> Self {
         Self {
             function: value.function,
             kind: value.kind,
@@ -147,8 +147,8 @@ impl From<iota_sdk::graphql_client::query_types::TransactionsFilter> for Transac
     }
 }
 
-impl From<TransactionsFilter> for iota_sdk::graphql_client::query_types::TransactionsFilter {
-    fn from(value: TransactionsFilter) -> Self {
+impl From<TransactionBlockFilter> for iota_sdk::graphql_client::query_types::TransactionBlockFilter {
+    fn from(value: TransactionBlockFilter) -> Self {
         Self {
             function: value.function,
             kind: value.kind,
@@ -1034,7 +1034,7 @@ impl From<MoveModule> for iota_sdk::graphql_client::query_types::MoveModule {
 
 #[derive(uniffi::Record)]
 pub struct MoveModuleConnection {
-    pub nodes: Vec<MoveModuleQuery>,
+    pub nodes: Vec<MoveModuleRef>,
     pub page_info: PageInfo,
 }
 
@@ -1057,14 +1057,14 @@ impl From<MoveModuleConnection> for iota_sdk::graphql_client::query_types::MoveM
 }
 
 #[derive(uniffi::Record)]
-pub struct MovePackageQuery {
+pub struct MovePackageRef {
     pub address: Arc<Address>,
     #[uniffi(default = None)]
     pub bcs: Option<Base64>,
 }
 
-impl From<iota_sdk::graphql_client::query_types::MovePackageQuery> for MovePackageQuery {
-    fn from(value: iota_sdk::graphql_client::query_types::MovePackageQuery) -> Self {
+impl From<iota_sdk::graphql_client::query_types::MovePackage> for MovePackageRef {
+    fn from(value: iota_sdk::graphql_client::query_types::MovePackage) -> Self {
         Self {
             address: Arc::new(value.address.into()),
             bcs: value.bcs,
@@ -1072,8 +1072,8 @@ impl From<iota_sdk::graphql_client::query_types::MovePackageQuery> for MovePacka
     }
 }
 
-impl From<MovePackageQuery> for iota_sdk::graphql_client::query_types::MovePackageQuery {
-    fn from(value: MovePackageQuery) -> Self {
+impl From<MovePackageRef> for iota_sdk::graphql_client::query_types::MovePackage {
+    fn from(value: MovePackageRef) -> Self {
         Self {
             address: (**value.address),
             bcs: value.bcs,
@@ -1082,13 +1082,13 @@ impl From<MovePackageQuery> for iota_sdk::graphql_client::query_types::MovePacka
 }
 
 #[derive(uniffi::Record)]
-pub struct MoveModuleQuery {
-    pub package: MovePackageQuery,
+pub struct MoveModuleRef {
+    pub package: MovePackageRef,
     pub name: String,
 }
 
-impl From<iota_sdk::graphql_client::query_types::MoveModuleQuery> for MoveModuleQuery {
-    fn from(value: iota_sdk::graphql_client::query_types::MoveModuleQuery) -> Self {
+impl From<iota_sdk::graphql_client::query_types::MoveModuleRef> for MoveModuleRef {
+    fn from(value: iota_sdk::graphql_client::query_types::MoveModuleRef) -> Self {
         Self {
             package: value.package.into(),
             name: value.name,
@@ -1096,12 +1096,78 @@ impl From<iota_sdk::graphql_client::query_types::MoveModuleQuery> for MoveModule
     }
 }
 
-impl From<MoveModuleQuery> for iota_sdk::graphql_client::query_types::MoveModuleQuery {
-    fn from(value: MoveModuleQuery) -> Self {
+impl From<MoveModuleRef> for iota_sdk::graphql_client::query_types::MoveModuleRef {
+    fn from(value: MoveModuleRef) -> Self {
         Self {
             package: value.package.into(),
             name: value.name,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // === MovePackageRef bidirectional conversions ===
+
+    #[test]
+    fn move_package_ref_from_graphql_roundtrip() {
+        use iota_sdk::graphql_client::query_types::MovePackage as GqlMovePackage;
+
+        // Construct Base64 directly from a String to avoid needing PartialEq
+        let address: iota_types::Address = "0x1".parse().unwrap();
+        let gql = GqlMovePackage {
+            address,
+            bcs: Some(Base64("YWJjZA==".to_string())), // "abcd" in base64
+        };
+
+        let ffi: MovePackageRef = gql.clone().into();
+        let roundtrip: iota_sdk::graphql_client::query_types::MovePackage = ffi.into();
+
+        assert_eq!(roundtrip.address, address);
+        // Compare Base64 inner strings instead of whole structs
+        assert_eq!(roundtrip.bcs.as_ref().map(|b| b.0.as_str()), gql.bcs.as_ref().map(|b| b.0.as_str()));
+    }
+
+    #[test]
+    fn move_package_ref_from_graphql_none_bcs() {
+        use iota_sdk::graphql_client::query_types::MovePackage as GqlMovePackage;
+
+        let address: iota_types::Address = "0xCAFEBABE".parse().unwrap();
+        let gql = GqlMovePackage {
+            address,
+            bcs: None,
+        };
+
+        let ffi: MovePackageRef = gql.clone().into();
+        let roundtrip: iota_sdk::graphql_client::query_types::MovePackage = ffi.into();
+
+        assert_eq!(roundtrip.address, address);
+        assert!(roundtrip.bcs.is_none());
+    }
+
+    // === MoveModuleRef bidirectional conversions ===
+
+    #[test]
+    fn move_module_ref_from_graphql_roundtrip() {
+        use iota_sdk::graphql_client::query_types::MoveModuleRef as GqlMoveModuleRef;
+        use iota_sdk::graphql_client::query_types::MovePackage as GqlMovePackage;
+
+        let address: iota_types::Address = "0x2".parse().unwrap();
+        let gql = GqlMoveModuleRef {
+            package: GqlMovePackage {
+                address,
+                bcs: None,
+            },
+            name: "my_module".to_string(),
+        };
+
+        let ffi: MoveModuleRef = gql.clone().into();
+        let roundtrip: iota_sdk::graphql_client::query_types::MoveModuleRef = ffi.into();
+
+        assert_eq!(roundtrip.package.address, address);
+        assert_eq!(roundtrip.name, "my_module");
     }
 }
 
@@ -1120,7 +1186,7 @@ pub struct MoveField {
 }
 
 #[uniffi::remote(Record)]
-pub struct MoveStructQuery {
+pub struct MoveStruct {
     #[uniffi(default = None)]
     pub abilities: Option<Vec<MoveAbility>>,
     pub name: String,
@@ -1133,7 +1199,7 @@ pub struct MoveStructQuery {
 #[uniffi::remote(Record)]
 pub struct MoveStructConnection {
     pub page_info: PageInfo,
-    pub nodes: Vec<MoveStructQuery>,
+    pub nodes: Vec<MoveStruct>,
 }
 
 #[derive(uniffi::Record)]

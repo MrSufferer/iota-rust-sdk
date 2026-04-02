@@ -2,10 +2,12 @@
 // Modifications Copyright (c) 2025 IOTA Stiftung
 // SPDX-License-Identifier: Apache-2.0
 
+//! Query types for IOTA objects.
+
 use crate::query_types::{Address, Base64, MoveObjectContents, ObjectId, PageInfo, schema};
 
 // ===========================================================================
-// Object(s) Queries
+// Queries
 // ===========================================================================
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -23,7 +25,7 @@ pub struct ObjectsQuery {
 }
 
 // ===========================================================================
-// Object(s) Query Args
+// Query Args
 // ===========================================================================
 
 #[derive(cynic::QueryVariables, Debug)]
@@ -42,7 +44,7 @@ pub struct ObjectsQueryArgs {
 }
 
 // ===========================================================================
-// Object(s) Types
+// Types
 // ===========================================================================
 
 #[derive(cynic::QueryFragment, Debug)]
